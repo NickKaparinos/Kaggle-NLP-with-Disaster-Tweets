@@ -6,11 +6,13 @@ Nick Kaparinos
 """
 
 from utilities import *
+import logging
 import pandas as pd
 import time
-from nltk.tokenize import TweetTokenizer
-from sklearn.model_selection import StratifiedKFold
-from transformers import BertTokenizer
+import sys
+import optuna
+from os import makedirs
+from pickle import dump
 import torch
 
 
@@ -21,40 +23,46 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     device = 'cpu'
 
-    # Read data
-    train_data = pd.read_csv('Data/train.csv')
-    train_data = train_data.iloc[:25]
-    X_train = train_data.iloc[:, :-1]
-    y_train = train_data.iloc[:, -1]
-    skf = StratifiedKFold(n_splits=4)
+    # Log directory
+    time_stamp = str(time.strftime('%d_%b_%Y_%H_%M_%S', time.localtime()))
+    LOG_DIR = f'logs/mutag{time_stamp}/'
+    makedirs(LOG_DIR, exist_ok=True)
 
-    # Wandb
+    # Hyperparameter optimisation
     project = 'Kaggle-Disaster'
-    name = 'tasos'
+    study_name = f'Kaggle_Disaster_{time_stamp}'
+    epochs = 2
     notes = ''
-    config = {}
-    wandb.init(project=project, entity="nickkaparinos", name=name, config=config, notes=notes, group='', reinit=True)
+    objective = define_objective(project, epochs, notes, seed, device)
+    optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
+    study = optuna.create_study(sampler=optuna.samplers.TPESampler(seed=seed), study_name=study_name,
+                                direction='maximize', pruner=optuna.pruners.HyperbandPruner(),
+                                storage=f'sqlite:///{LOG_DIR}{study_name}.db', load_if_exists=True)
+    study.optimize(objective, n_trials=2, timeout=None)
+    print(f'Best hyperparameters: {study.best_params}')
+    print(f'Best value: {study.best_value}')
 
-    for train_index, validation_index in skf.split(X_train, y_train):
-        # Split
-        X_train_fold, y_train_fold = train_data.iloc[train_index], y_train.iloc[train_index]
-        X_val_fold, y_val_fold = train_data.iloc[validation_index], y_train.iloc[validation_index]
+    # Save results
+    results_dict = {'Best_hyperparameters': study.best_params, 'Best_value': study.best_value, 'study_name': study_name,
+                    'log_dir': LOG_DIR}
+    save_dict_to_file(results_dict, LOG_DIR, txt_name='study_results')
+    study.trials_dataframe().to_csv(LOG_DIR + "study_results.csv")
 
-        train_dataset, validation_dataset = Dataset(X_train_fold, y_train_fold), Dataset(X_val_fold, y_val_fold)
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True)
-        validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=2)
+    # Plot study results
+    plots = [(optuna.visualization.plot_optimization_history, "optimization_history.png"),
+             (optuna.visualization.plot_intermediate_values, "intermediate_values.png"),
+             (optuna.visualization.plot_parallel_coordinate, "parallel_coordinate.png"),
+             (optuna.visualization.plot_contour, "contour.png"),
+             (optuna.visualization.plot_param_importances, "param_importances.png")]
+    figs = []
+    for plot_function, plot_name in plots:
+        fig = plot_function(study)
+        figs.append(fig)
+        fig.update_layout(title=dict(font=dict(size=20)), font=dict(size=15))
+        fig.write_image(LOG_DIR + plot_name, width=1920, height=1080)
+    with open(LOG_DIR + 'result_figures.pkl', 'wb') as f:
+        dump(figs, f)
 
-        # Model
-        model = BertClassifier().to(device)
-        loss_fn = torch.nn.NLLLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-        epochs = 1
-        fold = 0
-
-        for epoch in range(epochs):
-            print(f'{epoch = }')
-            train_one_epoch(model, train_dataloader, loss_fn, optimizer, epoch + 1, fold, device)
-            evaluation(validation_dataloader, model, loss_fn, epoch, fold, device)
     # Execution Time
     end = time.perf_counter()
     print(f"\nExecution time = {end - start:.2f} second(s)")
