@@ -41,7 +41,7 @@ def main():
         X_val_fold, y_val_fold = train_data.iloc[validation_index], y_train.iloc[validation_index]
 
         train_dataset, validation_dataset = Dataset(X_train_fold, y_train_fold), Dataset(X_val_fold, y_val_fold)
-        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=1, shuffle=True)
+        train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=4, shuffle=True)
         validation_dataloader = torch.utils.data.DataLoader(validation_dataset, batch_size=2)
 
         # Model
@@ -54,16 +54,7 @@ def main():
         for epoch in range(epochs):
             print(f'{epoch = }')
             train_one_epoch(model, train_dataloader, loss_fn, optimizer, epoch + 1, fold, device)
-
-        # fet = train_dataset[0]
-        #
-        # mask = fet[0]['attention_mask'].to(device)
-        # input_id = fet[0]['input_ids'].squeeze(1).to(device)
-        #
-        # output = model(input_id, mask)
-
-        fet = 5
-
+            evaluation(validation_dataloader, model, loss_fn, epoch, fold, device)
     # Execution Time
     end = time.perf_counter()
     print(f"\nExecution time = {end - start:.2f} second(s)")
