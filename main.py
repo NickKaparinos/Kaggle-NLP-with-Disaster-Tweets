@@ -21,7 +21,9 @@ def main():
     seed = 0
     set_all_seeds(seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    device = 'cpu'
+    # device = 'cpu'
+    if debugging:
+        print('Debugging!!')
 
     # Log directory
     time_stamp = str(time.strftime('%d_%b_%Y_%H_%M_%S', time.localtime()))
@@ -31,14 +33,14 @@ def main():
     # Hyperparameter optimisation
     project = 'Kaggle-Disaster'
     study_name = f'Kaggle_Disaster_{time_stamp}'
-    epochs = 2
+    epochs = 6
     notes = ''
     objective = define_objective(project, epochs, notes, seed, device)
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
     study = optuna.create_study(sampler=optuna.samplers.TPESampler(seed=seed), study_name=study_name,
                                 direction='maximize', pruner=optuna.pruners.HyperbandPruner(),
                                 storage=f'sqlite:///{LOG_DIR}{study_name}.db', load_if_exists=True)
-    study.optimize(objective, n_trials=2, timeout=None)
+    study.optimize(objective, n_trials=8, timeout=2*3600)
     print(f'Best hyperparameters: {study.best_params}')
     print(f'Best value: {study.best_value}')
 
