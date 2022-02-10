@@ -7,3 +7,4 @@ wandb/
 mazelab/
 README.md
 test.py
+*.zip
