@@ -18,8 +18,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import StratifiedKFold
 from statistics import mean
 
-labels = {'No Disaster': 0, 'Disaster': 1}
-debugging = True
+debugging = False
 
 
 def define_objective(project, epochs, notes, seed, device):
@@ -37,7 +36,7 @@ def define_objective(project, epochs, notes, seed, device):
         max_length = 64
         skf = StratifiedKFold(n_splits=n_folds)
 
-        learning_rate = trial.suggest_float('learning_rate', low=1e-6, high=1e-4, step=0.001)
+        learning_rate = trial.suggest_float('learning_rate', low=1e-7, high=1e-5, log=True)
         n_linear_layers = trial.suggest_int('n_linear_layers', 1, 4)
         n_neurons = trial.suggest_int('n_neurons', 16, 256, 16)
         dropout_p = trial.suggest_float('dropout_p', low=0.0, high=0.25, step=0.05)
@@ -126,21 +125,13 @@ class Dataset(torch.utils.data.Dataset):
             self.tokenizer(text, padding='max_length', max_length=max_length, truncation=True, return_tensors="pt")
             for text in df['text']]
 
-    def classes(self):
-        return self.labels
-
     def __len__(self):
         return len(self.labels)
 
-    def get_batch_labels(self, idx):
-        return np.array(self.labels.iloc[idx])
-
-    def get_batch_texts(self, idx):
-        return self.texts[idx]
-
     def __getitem__(self, idx):
-        batch_texts = self.get_batch_texts(idx)
-        batch_y = self.get_batch_labels(idx)
+        batch_texts = self.texts[idx]
+        batch_y = np.array(self.labels.iloc[idx])
+
         return batch_texts, batch_y
 
 

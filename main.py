@@ -7,7 +7,6 @@ Nick Kaparinos
 
 from utilities import *
 import logging
-import pandas as pd
 import time
 import sys
 import optuna
@@ -21,7 +20,6 @@ def main():
     seed = 0
     set_all_seeds(seed)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    device = 'cpu'
     if debugging:
         print('Debugging!!')
 
@@ -37,10 +35,11 @@ def main():
     notes = ''
     objective = define_objective(project, epochs, notes, seed, device)
     optuna.logging.get_logger("optuna").addHandler(logging.StreamHandler(sys.stdout))
-    study = optuna.create_study(sampler=optuna.samplers.TPESampler(seed=seed), study_name=study_name,
+    study = optuna.create_study(sampler=optuna.samplers.TPESampler(), study_name=study_name,
                                 direction='maximize', pruner=optuna.pruners.HyperbandPruner(),
-                                storage=f'sqlite:///{LOG_DIR}{study_name}.db', load_if_exists=True)
-    study.optimize(objective, n_trials=2, timeout=None)
+                                storage=f'sqlite:///{LOG_DIR}{study_name}.db',
+                                load_if_exists=True)
+    study.optimize(objective, n_trials=5, timeout=None)
     print(f'Best hyperparameters: {study.best_params}')
     print(f'Best value: {study.best_value}')
 
@@ -52,7 +51,6 @@ def main():
 
     # Plot study results
     plots = [(optuna.visualization.plot_optimization_history, "optimization_history.png"),
-             (optuna.visualization.plot_intermediate_values, "intermediate_values.png"),
              (optuna.visualization.plot_parallel_coordinate, "parallel_coordinate.png"),
              (optuna.visualization.plot_contour, "contour.png"),
              (optuna.visualization.plot_param_importances, "param_importances.png")]
